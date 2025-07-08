@@ -4,7 +4,7 @@ services:
     build:
       context: ./proxy
       dockerfile: Dockerfile
-    ports:
+    #ports:
       #- "8080:8080"
     volumes:
       - ./proxy:/app
@@ -17,7 +17,7 @@ services:
     build:
       context: ./serveweb
       dockerfile: Dockerfile.serveweb
-    ports:
+    #ports:
       #- "8000:8000"
     volumes:
       - ./serveweb:/app
