@@ -1,0 +1,42 @@
+FROM almalinux:9
+
+USER root
+
+RUN dnf update -y
+RUN dnf install wget git maven -y
+
+ENV DISTRIBUTION_NAME rhel
+RUN cat <<EOF > /etc/yum.repos.d/adoptium.repo
+[Adoptium]
+name=Adoptium
+baseurl=https://packages.adoptium.net/artifactory/rpm/${DISTRIBUTION_NAME:-$(. /etc/os-release; echo $ID)}/$releasever/$basearch
+enabled=1
+gpgcheck=1
+gpgkey=https://packages.adoptium.net/artifactory/api/gpg/key/public
+EOF
+
+RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc
+RUN cat <<EOF > /etc/yum.repos.d/vscode.repo
+[code]
+name=Visual Studio Code
+baseurl=https://packages.microsoft.com/yumrepos/vscode
+enabled=1
+gpgcheck=1
+gpgkey=https://packages.microsoft.com/keys/microsoft.asc
+EOF
+
+RUN dnf check-update
+RUN dnf update -y
+RUN dnf install temurin-21-jdk -y
+RUN dnf install code -y
+
+# entrypoint
+ENTRYPOINT [ "code", "serve-web", "--without-connection-token", "--accept-server-license-terms" ]
+
+# default arguments
+CMD [ "--host", "0.0.0.0", "--port", "8000", "--cli-data-dir", "/root/.vscode/cli-data", "--server-data-dir", "/root/.vscode/server-data" ]
+
+HEALTHCHECK NONE
+
+# expose port
+EXPOSE 8000

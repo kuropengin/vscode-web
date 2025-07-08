@@ -1,0 +1,8 @@
+{
+  "name": "node-http-proxy-sample",
+  "version": "1.0.0",
+  "main": "proxy.js",
+  "dependencies": {
+    "http-proxy": "^1.18.1"
+  }
+}

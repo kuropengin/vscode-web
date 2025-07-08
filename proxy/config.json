@@ -1,0 +1,7 @@
+{
+  "target": "http://serveweb:8000",
+  "rules": [
+    { "name": "hoge", "from": "a.hoge.com", "to": "b.sage.com" },
+    { "name": "foo", "from": "x.foo.com", "to": "y.bar.com" }
+  ]
+}
