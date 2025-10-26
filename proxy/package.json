@@ -1,8 +1,14 @@
 {
-  "name": "node-http-proxy-sample",
+  "name": "vscode-proxy",
   "version": "1.0.0",
+  "description": "Proxy server for VSCode serve-web to bypass CORS restrictions",
   "main": "proxy.js",
+  "type": "module",
+  "scripts": {
+    "start": "node proxy.js"
+  },
   "dependencies": {
-    "http-proxy": "^1.18.1"
+    "express": "^4.21.1",
+    "http-proxy-middleware": "^3.0.0"
   }
 }

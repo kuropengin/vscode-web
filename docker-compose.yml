@@ -4,21 +4,19 @@ services:
     build:
       context: ./proxy
       dockerfile: Dockerfile
-    #ports:
-      #- "8080:8080"
     volumes:
       - ./proxy:/app
     working_dir: /app
-    command: node proxy.js
-    depends_on:
-      - serveweb
+    command: npm start
+    environment:
+      - PROXY_PORT=8080
+      - TARGET_VSCODE_PORT=8000
+      - TARGET_VSCODE_HOST=http://serveweb
 
   serveweb:
     build:
       context: ./serveweb
       dockerfile: Dockerfile.serveweb
-    #ports:
-      #- "8000:8000"
     volumes:
       - ./serveweb:/app
     working_dir: /app
@@ -29,5 +27,3 @@ services:
       - "5080:5080"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - proxy

@@ -1,63 +1,72 @@
-const http = require('http');
-const httpProxy = require('http-proxy');
-const fs = require('fs');
+import express from "express";
+import { createProxyMiddleware, responseInterceptor } from "http-proxy-middleware";
 
-// 設定ファイルの読み込み
-const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+const PORT = process.env.PROXY_PORT || 3000;
+const VSCODE_PORT = process.env.TARGET_VSCODE_PORT || 8080;
+const VSCODE_HOST = process.env.TARGET_VSCODE_HOST || "localhost";
 
-const proxy = httpProxy.createProxyServer({});
+const app = express();
 
-const TARGET = config.target || 'http://127.0.0.1:8000'; // 設定ファイルで指定、なければデフォルト
+/**
+ * ===============================
+ *  外部ドメイン用プロキシ設定
+ * ===============================
+ */
 
-const server = http.createServer((req, res) => {
-  // /[name]/*** 形式のリクエストか判定
-  const match = req.url.match(/^\/(\w+)(\/.*)?$/);
-  if (match && Array.isArray(config.rules)) {
-    const rule = config.rules.find(r => r.name === match[1]);
-    if (rule) {
-      // /[name]/*** → from + *** へProxy
-      const newPath = (match[2] || '');
-      const targetUrl = rule.from + newPath;
-      // ここでは from をURLとして扱う（例: http://a.hoge.com）
-      proxy.web(req, res, { target: targetUrl, selfHandleResponse: true });
-      return;
+// vscode-unpkg.net (言語パック)
+app.use("/proxy/unpkg", createProxyMiddleware({
+    target: "https://www.vscode-unpkg.net/",
+    changeOrigin: true,
+    pathRewrite: { "^/proxy/unpkg": "" },
+    onProxyRes(proxyRes) {
+        proxyRes.headers["Access-Control-Allow-Origin"] = "*";
     }
-  }
-  // 通常のProxy
-  proxy.web(req, res, { target: TARGET, selfHandleResponse: true });
-});
+}));
 
-// WebSocket対応（置換は行わず単純プロキシ）
-server.on('upgrade', (req, socket, head) => {
-  proxy.ws(req, socket, head, { target: TARGET });
-});
 
-proxy.on('proxyRes', function (proxyRes, req, res) {
-  let body = Buffer.from('');
-  proxyRes.on('data', function (data) {
-    body = Buffer.concat([body, data]);
-  });
-  proxyRes.on('end', function () {
-    let content = body.toString();
-    // すべてのルールで置換: from→/[name]/*** 形式
-    if (Array.isArray(config.rules)) {
-      for (const rule of config.rules) {
-        // fromに一致した部分を /[name]/$1 に置換
-        const re = new RegExp(rule.from + '(\/[^\s"\']*)?', 'g');
-        content = content.replace(re, (m, p1) => `/${rule.name}${p1 || ''}`);
-      }
+/**
+ * ===============================
+ *  serve-web 本体のプロキシ
+ * ===============================
+ */
+app.use("/", createProxyMiddleware({
+    target: `${VSCODE_HOST}:${VSCODE_PORT}`,
+    changeOrigin: true,
+    selfHandleResponse: true,
+    ws: true,
+    xfwd: true,
+    onProxyReq: function(proxyReq, req, res){
+        proxyReq.setHeader('Origin',proxyReq.protocol + "//" + proxyReq.host)
+        proxyReq.setHeader('x-origin',proxyReq.protocol + "//" + proxyReq.host)
+    },
+    /**
+     * HTML・JSの中のURL書き換え処理
+     *  https://www.vscode-unpkg.net/..../nls.messages.js  → /proxy/unpkg
+     */
+    on: {
+        proxyRes: responseInterceptor(async (responseBuffer, proxyRes, req, res) => {
+            const contentType = proxyRes.headers["content-type"] || "";
+            if (contentType.includes("text/html")) {
+                let body = responseBuffer.toString('utf8');
+
+                // 書き換え対象
+                const result = body.replace(
+                    /https:\/\/www\.vscode-unpkg\.net\/[^"' ]*\/nls\.messages\.js/g,
+                    (match) => {
+                        return match.replace("https://www.vscode-unpkg.net", "/proxy/unpkg");
+                    }
+                );
+                
+                res.setHeader("Access-Control-Allow-Origin", "*");
+                return result;
+            } else {
+                return responseBuffer;
+            }
+        })
     }
-    // CORS対応: 全て * に設定
-    const headers = Object.assign({}, proxyRes.headers, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': '*',
-      'Access-Control-Allow-Headers': '*'
-    });
-    res.writeHead(proxyRes.statusCode, headers);
-    res.end(content);
-  });
-});
+}));
 
-server.listen(8080, () => {
-  console.log('Proxy server listening on port 8080 (proxying to', TARGET, ')');
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`VSCode Proxy running on http://0.0.0.0:${PORT}`);
+    console.log(`Forwarding VSCode serve-web (${VSCODE_HOST}:${VSCODE_PORT})`);
 });
